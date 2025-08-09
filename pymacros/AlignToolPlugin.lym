@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="utf-8"?>
+<klayout-macro>
+ <description/>
+ <version/>
+ <category>pymacros</category>
+ <prolog/>
+ <epilog/>
+ <doc/>
+ <autorun>true</autorun>
+ <autorun-early>false</autorun-early>
+ <priority>0</priority>
+ <shortcut/>
+ <show-in-menu>false</show-in-menu>
+ <group-name/>
+ <menu-path/>
+ <interpreter>python</interpreter>
+ <dsl-interpreter-name/>
+ <text>from dataclasses import dataclass
+from typing import *
+import os 
+from enum import StrEnum
+import pya
+
+
+DEBUG = False
+
+
+def debug(*args, **kwargs):
+    if DEBUG:
+        print(*args, **kwargs)
+
+
+class AlignToolState(StrEnum):
+    INACTIVE = "inactive"
+    PENDING_SELECTION1 = "pending_selection1"
+    PENDING_SELECTION2 = "pending_selection2"
+
+
+@dataclass
+class AlignToolSelection:
+    layer: int
+    shape: pya.Shape
+    edge: pya.Edge
+    snap_point: pya.Point
+
+
+class AlignToolSetupDock(pya.QDockWidget):
+    def __init__(self):
+        super().__init__()
+        self.setupWidget = AlignToolSetupWidget()
+        self.setWidget(self.setupWidget)
+        self.setWindowTitle("Align Tool")
+        
+    def updateState(self, state: AlignToolState):
+        self.setupWidget.updateState(state)
+        
+        
+class AlignToolSetupWidget(pya.QWidget):
+    def __init__(self):
+        super().__init__()
+        self.statusLabel = pya.QLabel("Status: initalizing…")
+        self.cancelInfoLabel = pya.QLabel("Esc to cancel")
+        self.cancelInfoLabel.foregroundRole = pya.QPalette_ColorRole.Mid
+        
+        self.layout       = pya.QGridLayout()
+        self.layout.addWidget(self.statusLabel,    0, 0, 1, 1)
+        self.layout.addWidget(self.cancelInfoLabel,    1, 0, 1, 1)
+        self.layout.setRowStretch(2, 1)
+        self.setLayout(self.layout)
+         
+    def hideEvent(self, event):
+        event.accept()
+
+    def updateState(self, state: AlignToolState):
+        msg: str = ""
+        match state:
+            case AlignToolState.INACTIVE:
+                msg = ""
+            case AlignToolState.PENDING_SELECTION1:
+                msg = "Next: Select point to align"
+            case AlignToolState.PENDING_SELECTION2:
+                msg = "Next: Select point to reference"
+        self.statusLabel.setText(msg)
+
+        
+class AlignToolPlugin(pya.Plugin):
+    def __init__(self, view: pya.LayoutView):
+        super().__init__()
+        self.setupDock      = None
+        self.view            = view
+
+        self._state = AlignToolState.INACTIVE
+        self._selection1: Optional[AlignToolSelection] = None
+        self.markers_selection1 = []
+        self.markers_selection2 = []
+        self.toolTip = pya.QToolTip()       
+
+    @property
+    def layout(self) -&gt; pya.Layout:
+        return self.view.active_cellview().layout()
+        
+    @property
+    def dbu(self) -&gt; float:
+        return self.layout.dbu
+
+    @property
+    def state(self) -&gt; AlignToolState:
+        return self._state
+
+    @state.setter
+    def state(self, state: AlignToolState):
+        debug(f"Transitioning from {self._state.value} to {state.value}")
+        self._state = state
+        if not(self.setupDock):
+            pass
+        else:
+            self.setupDock.updateState(state)
+
+    @property
+    def selection1(self) -&gt; AlignToolSelection:
+        return self._selection1
+
+    @selection1.setter
+    def selection1(self, selection: AlignToolSelection):
+        debug(f"setting selection1 to {selection}")
+        self._selection1 = selection
+
+    def activated(self):
+        debug("AlignToolPlugin.activated")
+
+        if not(self.setupDock):
+            mw   = pya.Application.instance().main_window()
+            self.setupDock = AlignToolSetupDock()
+            mw.addDockWidget(pya.Qt_DockWidgetArea.RightDockWidgetArea, self.setupDock)
+        self.setupDock.show()
+        
+        self.state = AlignToolState.PENDING_SELECTION1
+            
+    def deactivated(self):
+        debug("AlignToolPlugin.deactivated")
+        
+        self.state = AlignToolState.INACTIVE
+        
+        self._clear_all_markers()
+        self.ungrab_mouse()
+        if self.setupDock:
+            self.setupDock.hide()
+
+    def deactivate(self):
+        debug("AlignToolPlugin.deactive")
+        esc_key  = 16777216 
+        keyPress = pya.QKeyEvent(pya.QKeyEvent.KeyPress, esc_key, pya.Qt.NoModifier)
+        pya.QApplication.sendEvent(self.view.widget(), keyPress)        
+
+    def _clear_all_markers(self):
+        self._clear_markers_selection1()
+        self._clear_markers_selection2()
+        
+    def _clear_markers_selection1(self):
+        for marker in self.markers_selection1:
+            marker._destroy()
+        self.markers_selection1 = []
+    
+    def _clear_markers_selection2(self):
+        for marker in self.markers_selection2:
+            marker._destroy()
+        self.markers_selection2 = []
+    
+    def find_nearest_edge_point(self, location: pya.Point, edge: pya.Edge) -&gt; pya.Point:
+        """
+        On the chosen edge, we want to find nearest end point or the center point
+        """
+
+        def halfway(a: int, b:int) -&gt; int:
+            if a &lt; b:
+                return a + (b - a) / 2
+            else:
+                return b + (a - b) / 2
+
+        nearest_point = None
+        nearest_distance = 9999999999
+        
+        edge_center = pya.Point(halfway(edge.x1, edge.x2), halfway(edge.y1, edge.y2))
+        points = [edge_center, edge.p1, edge.p2]
+        distances = [abs(p.distance(location)) for p in points]
+        
+        for point, distance in zip(points, distances):
+            if distance &lt; nearest_distance:
+                nearest_distance = distance
+                nearest_point = point  
+        
+        return nearest_point
+    
+    def find_selection(self, location: pya.DPoint, max_distance: int) -&gt; Optional[AlignToolSelection]:
+        location = location.to_itype(self.dbu)
+        
+        layer = None
+        shape = None
+        nearest_edge = None
+        
+        search_box = pya.Box(location.x - max_distance, location.y - max_distance, 
+                             location.x + max_distance, location.y + max_distance)
+        
+        top_cell = self.layout.top_cell()
+        for lyr in self.layout.layer_indexes():
+            li = self.layout.layer_infos()[lyr]
+            iter = top_cell.begin_shapes_rec_overlapping(lyr, search_box)
+            while not iter.at_end():
+                sh = iter.shape()
+                # print(f"lyr {lyr} ({li}), found {sh}")
+                pg = sh.polygon
+                if pg is not None:
+                    p = sh.polygon.transformed(iter.itrans())
+                    for e in p.each_edge():
+                       intersection = e.clipped_line(search_box)
+                       if intersection:
+                           # print(f"\t\tedges in search box: {intersection}")
+                           if nearest_edge is None or \
+                              e.distance_abs(location) &lt; nearest_edge.distance_abs(location):
+                               nearest_edge = e
+                               layer = lyr
+                               shape = sh
+                iter.next()
+
+        if nearest_edge is None:
+            return None
+            
+        snap_point = self.find_nearest_edge_point(location=location, edge=nearest_edge)
+        return AlignToolSelection(layer=layer,    
+                                  shape=shape,
+                                  edge=nearest_edge,
+                                  snap_point=snap_point)
+    
+    @property
+    def max_distance(self) -&gt; int:
+        return 20
+    
+    def preview_markers_for_selection(self, selection: AlignToolSelection) -&gt; List[pya.Marker]:
+        edge_marker = pya.Marker(self.view)
+        edge_marker.line_style     = 0
+        edge_marker.line_width     = 1
+        edge_marker.vertex_size    = 4 
+        edge_marker.dither_pattern = 2
+        edge_marker.set(selection.edge.to_dtype(self.dbu))
+        
+        point_marker = pya.Marker(self.view)
+        point_marker.line_style     = 0
+        point_marker.line_width     = 1
+        point_marker.vertex_size    = 4
+        point_marker.dither_pattern = 2
+        d = 10
+        marker_box = pya.Box(pya.Point(selection.snap_point.x - d, selection.snap_point.y - d), 
+                             pya.Point(selection.snap_point.x + d, selection.snap_point.y + d))
+        point_marker.set(marker_box.to_dtype(self.dbu))
+        
+        return [edge_marker, point_marker]
+    
+    def mouse_moved_event(self, dpoint: pya.DPoint, buttons: int, prio: bool):
+        if prio:
+            # print(f"mouse moved event, p={dpoint}, prio={prio}")
+
+            selection = self.find_selection(location=dpoint, max_distance=self.max_distance)
+            if selection is None:
+                match self.state:
+                    case AlignToolState.INACTIVE:
+                        return False
+                    case AlignToolState.PENDING_SELECTION1:
+                        self.toolTip.showText(pya.QCursor.pos, "Select shape feature to align") 
+                    case AlignToolState.PENDING_SELECTION2:
+                        self.toolTip.showText(pya.QCursor.pos, "Select shape feature to reference") 
+                return False  
+            
+            match self.state:
+                case AlignToolState.INACTIVE:
+                    return False
+                 
+                case AlignToolState.PENDING_SELECTION1:
+                    self._clear_markers_selection1()
+                    self.markers_selection1 = self.preview_markers_for_selection(selection)
+
+                case AlignToolState.PENDING_SELECTION2:
+                    self._clear_markers_selection2()
+                    self.markers_selection2 = self.preview_markers_for_selection(selection)
+
+            return True           
+        return False
+        
+    def mouse_click_event(self, dpoint: pya.DPoint, buttons: int, prio: bool):
+        if prio:
+            if buttons in [8]:  # Left click
+                selection = self.find_selection(location=dpoint, max_distance=self.max_distance)
+                if selection is None:
+                    return False
+                    
+                match self.state:
+                    case AlignToolState.INACTIVE:
+                        return False
+                     
+                    case AlignToolState.PENDING_SELECTION1:
+                        self.selection1 = selection
+                        self.state = AlignToolState.PENDING_SELECTION2
+                        
+                    case AlignToolState.PENDING_SELECTION2:
+                        selection1 = self.selection1
+                        selection2 = selection
+                    
+                        self.state = AlignToolState.INACTIVE
+                        self.selection1 = None
+                        
+                        self.commit_align(selection1, selection2)
+                
+            if buttons in [16, 32]:
+                self._clear_markers()
+                
+            return True
+        return False
+        
+    def commit_align(self, selection1: AlignToolSelection, selection2: AlignToolSelection):
+        self.view.transaction("align")
+        try:
+            cellView      = self.view.active_cellview()
+            cell          = cellView.cell
+            
+            cell1 = selection1.shape
+            cell2 = selection2.shape
+            debug(f"COMMIT, "
+                  f"\n\tselection1={selection1} (cell {cell1}), "
+                  f"\n\tselection2={selection2} (cell {cell2})")
+            
+            trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
+                              selection2.snap_point.y - selection1.snap_point.y)
+            cell1.transform(trans)
+            
+        finally:
+            self.view.commit()
+            self.deactivate()
+
+
+class AlignToolPluginFactory(pya.PluginFactory):
+    def __init__(self):
+        super().__init__()
+        iconPath = os.path.join(os.path.dirname(__file__), 'AlignToolIcon', '%s.png')
+        self.register(-1000, "Align Tool", "Align Tool", iconPath % "icon")
+  
+    def create_plugin(self, manager, root, view):
+        return AlignToolPlugin(view)
+
+AlignToolPluginFactory.instance = AlignToolPluginFactory()
+</text>
+</klayout-macro>
