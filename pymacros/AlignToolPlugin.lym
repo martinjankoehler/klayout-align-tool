@@ -39,6 +39,7 @@ class AlignToolState(StrEnum):
 @dataclass
 class AlignToolSelection:
     layer: int
+    path: List[pya.InstElement]
     shape: pya.Shape
     edge: pya.Edge
     snap_point: pya.Point
@@ -194,6 +195,7 @@ class AlignToolPlugin(pya.Plugin):
     def find_selection(self, location: pya.DPoint, max_distance: int) -&gt; Optional[AlignToolSelection]:
         location = location.to_itype(self.dbu)
         
+        path = None
         layer = None
         shape = None
         nearest_edge = None
@@ -217,16 +219,18 @@ class AlignToolPlugin(pya.Plugin):
                            # print(f"\t\tedges in search box: {intersection}")
                            if nearest_edge is None or \
                               e.distance_abs(location) &lt; nearest_edge.distance_abs(location):
-                               nearest_edge = e
                                layer = lyr
+                               path = iter.path()
                                shape = sh
+                               nearest_edge = e
                 iter.next()
 
         if nearest_edge is None:
             return None
             
         snap_point = self.find_nearest_edge_point(location=location, edge=nearest_edge)
-        return AlignToolSelection(layer=layer,    
+        return AlignToolSelection(layer=layer,
+                                  path=path,    
                                   shape=shape,
                                   edge=nearest_edge,
                                   snap_point=snap_point)
@@ -318,18 +322,21 @@ class AlignToolPlugin(pya.Plugin):
     def commit_align(self, selection1: AlignToolSelection, selection2: AlignToolSelection):
         self.view.transaction("align")
         try:
-            cellView      = self.view.active_cellview()
-            cell          = cellView.cell
-            
-            cell1 = selection1.shape
-            cell2 = selection2.shape
-            debug(f"COMMIT, "
-                  f"\n\tselection1={selection1} (cell {cell1}), "
-                  f"\n\tselection2={selection2} (cell {cell2})")
-            
-            trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
-                              selection2.snap_point.y - selection1.snap_point.y)
-            cell1.transform(trans)
+            if len(selection1.path) == 0:  # a shape within the same cell has to be aligned
+                debug(f"COMMIT, "
+                      f"\n\tshape {selection1.shape} is aligned to "
+                      f"\n\t{selection2.snap_point}")
+                trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
+                                  selection2.snap_point.y - selection1.snap_point.y)
+                selection1.shape.transform(trans)
+            elif len(selection1.path) &gt;= 1:  # an instance has to be aligned
+                inst1 = selection1.path[0]
+                debug(f"COMMIT, "
+                      f"\n\tinstance {inst1} is aligned to "
+                      f"\n\t{selection2.snap_point}")
+                trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
+                                  selection2.snap_point.y - selection1.snap_point.y)
+                inst1.inst().transform(trans)
             
         finally:
             self.view.commit()
