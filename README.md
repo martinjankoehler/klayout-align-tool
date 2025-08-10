@@ -1,22 +1,15 @@
 # KLayout Align Tool
 
-<p align="center">
-[![Watch the video](doc/step3-select-point-to-move.jpg)](https://youtu.be/sCo4Cf1f09Y)
-</p>
-
-
-# Installation and setup
+## Installation and setup
 
 This app can be installed through KLayout package manager
 
 After installation, the app can be accessed through [Toolbar] --> [Align]
 
 
-# Functions
+## Functions and 🎥 video
 
-<p align="center">
-<img align="middle" src="TODO" alt="Screenshot" width="800"/>
-</p>
+[![Watch the demo](doc/klayout-align-screenshot-demo-video.gif)](https://youtube.com/watch/v=sCo4Cf1f09Y)
 
 * Boost your layout productivity by quick alignments of layout elements, like
    * cell instances
@@ -25,27 +18,23 @@ After installation, the app can be accessed through [Toolbar] --> [Align]
    * edges (whole edge) 
    * points (e.g., edge end points, edge middle point)
 
-# Howto
+## Howto
 
+1. Click the 'Align' tool or press 'a' to enter the align mode 
 <p align="center">
 <img align="middle" src="doc/marked-step1-select-align-tool.jpg" alt="Step 1: Select Align Tool" width="800"/>
 </p>
-
+2. Select feature of shape that gets moved / aligned
 <p align="center">
 <img align="middle" src="doc/marked-step2-select-point-to-align.jpg" alt="Step 2: Select point to align" width="800"/>
 </p>
-
+3. Select feature of other shape that acts as a target reference
 <p align="center">
-<img align="middle" src="doc/marked-step3-select-point-to-move-to" alt="Step 3: Select point to move to" width="800"/>
+<img align="middle" src="doc/marked-step3-select-point-to-move-to.jpg" alt="Step 3: Select point to move to" width="800"/>
 </p>
-
+4. Left Click to apply change 
 <p align="center">
-<img align="middle" src="doc/marked-step4-alignment-done" alt="Step 4: Alignment done" width="800"/>
+<img align="middle" src="doc/marked-step4-alignment-done.jpg" alt="Step 4: Alignment done" width="800"/>
 </p>
-
-* Click the 'Align' tool or press 'a' to enter the align mode 
-* Select feature of shape that gets moved / aligned
-* Select feature of other shape that acts as a target reference
-* Left Click to apply change 
-* Press Esc to cancel the operation
+5. Press Esc to cancel the operation
   
