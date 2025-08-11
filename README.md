@@ -1,14 +1,5 @@
 # KLayout Align Tool
 
-## Installation and setup
-
-This app can be installed through KLayout package manager
-
-After installation, the app can be accessed through [Toolbar] --> [Align]
-
-
-## Functions and 🎥 video
-
 [![Watch the demo](doc/klayout-align-screenshot-demo-video.gif)](https://youtube.com/watch/v=sCo4Cf1f09Y)
 
 * Boost your layout productivity by quick alignments of layout elements, like
@@ -18,9 +9,13 @@ After installation, the app can be accessed through [Toolbar] --> [Align]
    * edges (whole edge) 
    * points (e.g., edge end points, edge middle point)
 
-## Howto
+This add-on can be installed through [KLayout](https://klayout.de) package manager, [installation instructions details here](#installation-instructions)
 
-1. Click the 'Align' tool or press 'a' to enter the align mode 
+After installation, the app can be accessed through *Toolbar*→*Align*
+
+## Usage
+
+1. Click the *Align* tool or press 'a' to enter the align mode (if you've configured the key binding for a)
 <p align="center">
 <img align="middle" src="doc/marked-step1-select-align-tool.jpg" alt="Step 1: Select Align Tool" width="800"/>
 </p>
@@ -32,9 +27,31 @@ After installation, the app can be accessed through [Toolbar] --> [Align]
 <p align="center">
 <img align="middle" src="doc/marked-step3-select-point-to-move-to.jpg" alt="Step 3: Select point to move to" width="800"/>
 </p>
-4. Left Click to apply change 
+4. Left click to apply change 
 <p align="center">
 <img align="middle" src="doc/marked-step4-alignment-done.jpg" alt="Step 4: Alignment done" width="800"/>
 </p>
 5. Press Esc to cancel the operation
-  
+
+## Installation instructions
+
+1. In the menu bar, click *Tools*→*Manage Packages* to enter the package manager
+<p align="center">
+<img align="middle" src="doc/klayout-package-manager-install1.jpg" alt="Step 1: Open package manager" width="800"/>
+</p>
+
+2. Locate the `AlignToolPlugin`, double-click to select it for installation, then press *Apply*
+<p align="center">
+<img align="middle" src="doc/klayout-package-manager-install2.jpg" alt="Step 2: Choose and install the package" width="1200"/>
+</p>
+
+3. Review and close the package installation report
+<p align="center">
+<img align="middle" src="doc/klayout-package-manager-install3.jpg" alt="Step 3: Review the package installation report" width="600"/>
+</p>
+
+3. Confirm macro execution
+<p align="center">
+<img align="middle" src="doc/klayout-package-manager-install4.jpg" alt="Step 4: Confirm macro execution" width="500"/>
+</p>
+
