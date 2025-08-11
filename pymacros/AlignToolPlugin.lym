@@ -222,26 +222,26 @@ class AlignToolPlugin(pya.Plugin):
         search_box = pya.Box(location.x - max_distance, location.y - max_distance, 
                              location.x + max_distance, location.y + max_distance)
         
-        top_cell = self.layout.top_cell()
-        for lyr, li in enumerate(self.layout.layer_infos()):
-            iter = top_cell.begin_shapes_rec_overlapping(lyr, search_box)
-            while not iter.at_end():
-                sh = iter.shape()
-                # print(f"lyr {lyr} ({li}), found {sh}")
-                pg = sh.polygon
-                if pg is not None:
-                    p = sh.polygon.transformed(iter.itrans())
-                    for e in p.each_edge():
-                       intersection = e.clipped_line(search_box)
-                       if intersection:
-                           # print(f"\t\tedges in search box: {intersection}")
-                           if nearest_edge is None or \
-                              e.distance_abs(location) &lt; nearest_edge.distance_abs(location):
-                               layer = lyr
-                               path = iter.path()
-                               shape = sh
-                               nearest_edge = e
-                iter.next()
+        for top_cell in self.layout.top_cells():
+          for lyr, li in enumerate(self.layout.layer_infos()):
+              iter = top_cell.begin_shapes_rec_overlapping(lyr, search_box)
+              while not iter.at_end():
+                  sh = iter.shape()
+                  # print(f"lyr {lyr} ({li}), found {sh}")
+                  pg = sh.polygon
+                  if pg is not None:
+                      p = sh.polygon.transformed(iter.itrans())
+                      for e in p.each_edge():
+                         intersection = e.clipped_line(search_box)
+                         if intersection:
+                             # print(f"\t\tedges in search box: {intersection}")
+                             if nearest_edge is None or \
+                                e.distance_abs(location) &lt; nearest_edge.distance_abs(location):
+                                 layer = lyr
+                                 path = iter.path()
+                                 shape = sh
+                                 nearest_edge = e
+                  iter.next()
 
         if nearest_edge is None:
             return None
