@@ -29,9 +29,20 @@ After installation, the app can be accessed through *Toolbar*→*Align*
 </p>
 4. Left click to apply change 
 <p align="center">
-<img align="middle" src="doc/marked-step4-alignment-done.jpg" alt="Step 4: Alignment done" width="800"/>
+<img align="middle" src="doc/marked-step4-alignment-done.jpg" alt="Step 4: Alignment done" width="1000"/>
 </p>
 5. Press Esc to cancel the operation
+
+## Pro-Tip: assign key binding 'a' to the tool
+
+- In the main menu, open the Preferences/Settings in KLayout
+- Navigate to *Application*→*Customize Menu*
+- Search for 'Align'
+- Assign Shortcut 'A' to the path `edit_menu.mode_menu.Align`
+
+<p align="center">
+<img align="middle" src="doc/assign-shortcut.jpg" alt="Assign shortcut 'A' to the 'Align' tool" width="800"/>
+</p>
 
 ## Installation instructions
 
