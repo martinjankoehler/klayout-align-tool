@@ -362,23 +362,31 @@ class AlignToolPlugin(pya.Plugin):
             # we prioritize the child instances of top cell
             # for those we also consider the bounding box
             if self.view.max_hier_levels &gt;= 1:
-                for inst in top_cell.each_inst():
+                iter = top_cell.begin_instances_rec_overlapping(search_box)
+                iter.min_depth = max(self.view.min_hier_levels-1, 0)
+                iter.max_depth = max(self.view.max_hier_levels-1, 0)
+                while not iter.at_end():
+                    inst = iter.current_inst_element().inst()
                     hidden = self.view.is_cell_hidden(inst.cell.cell_index(), self.view.active_cellview_index)
-                    # print(f"inst from cell {inst.cell.name} hidden? {hidden}")
+                    # print(f"inst from cell {inst.cell.name} hidden? {hidden}, "
+                    #      f"trans={iter.trans() * iter.inst_trans()}, "
+                    #      f"inst_bbox={inst.bbox()}")
                     if not hidden:
-                        edges = pya.Edges(inst.bbox())
+                        inst_bbox_from_top = inst.bbox().transformed(iter.trans())
+                        edges = pya.Edges(inst_bbox_from_top)
                         for e in edges:
                             if e.clipped(search_box) is not None:
                                 consider_edge_selection(
                                     AlignToolSelection(location=location,
                                                        search_box=search_box,
                                                        edge=e,
-                                                       path=[],
-                                                       shape=inst.bbox(),
+                                                       path=iter.path(),
+                                                       shape=inst_bbox_from_top,
                                                        bbox_of_instance=inst,
                                                        layer=None,
                                                        snap_point=None)  # NOTE: snap point will be set later
                                 )
+                    iter.next()
             
             # for lyr, li in enumerate(self.layout.layer_infos()):
             ## NOTE: GUI levels 0 .. 0 means that only the TOP cell(s) are viewed from outside!
@@ -582,8 +590,8 @@ class AlignToolPlugin(pya.Plugin):
                     dx = edge2.p1.x - edge1.p1.x
                     dy = 0
             else:
-                pya.QMessageBox.warning(self.view.widget(), "Unsupported case", 
-                                        "Aligning non-parallel edges is not supported yet, ignoring this attempt")
+                pya.QMessageBox.warning(self.view.widget(), "Unsupported use case", 
+                                        "Aligning non-parallel edges is not yet supported.")
                 self.deactivate()
                 return
         
