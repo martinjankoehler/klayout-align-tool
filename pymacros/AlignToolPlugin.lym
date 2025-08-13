@@ -57,11 +57,14 @@ class AlignToolState(StrEnum):
 
 @dataclass
 class AlignToolSelection:
-    layer: int
+    location: pya.Point
+    search_box: pya.Box
+    edge: Optional[pya.Edge]
     path: List[pya.InstElement]
-    shape: pya.Shape
-    edge: pya.Edge
-    snap_point: pya.Point
+    shape: Optional[pya.Shape]
+    bbox_of_instance: Optional[pya.Instance]
+    layer: Optional[int]
+    snap_point: Optional[pya.Point]
 
 
 class AlignToolSetupDock(pya.QDockWidget):
@@ -97,9 +100,9 @@ class AlignToolSetupWidget(pya.QWidget):
             case AlignToolState.INACTIVE:
                 msg = ""
             case AlignToolState.PENDING_SELECTION1:
-                msg = "Next: Select point to align"
+                msg = "Next: Select point/edge to align"
             case AlignToolState.PENDING_SELECTION2:
-                msg = "Next: Select point to reference"
+                msg = "Next: Select point/edge to reference"
         self.statusLabel.setText(msg)
 
         
@@ -116,8 +119,12 @@ class AlignToolPlugin(pya.Plugin):
         self.toolTip = pya.QToolTip()       
 
     @property
+    def cell_view(self) -&gt; pya.CellView:
+        return self.view.active_cellview()
+
+    @property
     def layout(self) -&gt; pya.Layout:
-        return self.view.active_cellview().layout()
+        return self.cell_view.layout()
         
     @property
     def dbu(self) -&gt; float:
@@ -145,8 +152,18 @@ class AlignToolPlugin(pya.Plugin):
         debug(f"setting selection1 to {selection}")
         self._selection1 = selection
 
+    @property
+    def search_box_marker_visible(self) -&gt; bool:
+        return True  # DEBUG
+
     def activated(self):
-        debug("AlignToolPlugin.activated")
+        view_is_visible = self.view.widget().isVisible()
+        debug(f"AlignToolPlugin.activated, "
+              f"for cell view {self.cell_view.cell_name}, "
+              f"is visible: {view_is_visible}")
+        debug(f"viewport trans: {self.view.viewport_trans()}")
+        if not view_is_visible:
+            return
 
         if not(self.setupDock):
             mw   = pya.Application.instance().main_window()
@@ -211,71 +228,145 @@ class AlignToolPlugin(pya.Plugin):
         
         return nearest_point
     
+    def visible_layer_indexes(self) -&gt; List[int]:
+        idxs = []
+        for lref in self.view.each_layer():
+            if lref.visible and lref.valid:
+                if lref.layer_index() == -1:  # hidden by the user
+                    continue
+                # print(f"layer is visible, name={lref.name}, idx={lref.layer_index()}, "
+                #       f"marked={lref.marked} cellview={lref.cellview()}, "
+                #      f"source={lref.source}")
+                idxs.append(lref.layer_index())
+        return idxs
+    
     def find_selection(self, location: pya.DPoint, max_distance: int) -&gt; Optional[AlignToolSelection]:
         location = location.to_itype(self.dbu)
-        
-        path = None
-        layer = None
-        shape = None
-        nearest_edge = None
-        
+                
         search_box = pya.Box(location.x - max_distance, location.y - max_distance, 
                              location.x + max_distance, location.y + max_distance)
+
+        nearest = AlignToolSelection(location=location,
+                                     search_box=search_box,
+                                     edge=None,
+                                     path=[],    
+                                     shape=None,
+                                     bbox_of_instance=None,
+                                     layer=None,
+                                     snap_point=None)
+        
+        def consider_edge_selection(selection: AlignToolSelection):
+            nonlocal nearest, search_box
+            intersection = e.clipped_line(search_box)
+            if intersection is None:
+                return
+            if nearest.edge is None or \
+               selection.edge.distance_abs(location) &lt; nearest.edge.distance_abs(location):
+                nearest = selection
+        
+        visible_layer_indexes = self.visible_layer_indexes()
         
         for top_cell in self.layout.top_cells():
-          for lyr, li in enumerate(self.layout.layer_infos()):
-              iter = top_cell.begin_shapes_rec_overlapping(lyr, search_box)
-              while not iter.at_end():
-                  sh = iter.shape()
-                  # print(f"lyr {lyr} ({li}), found {sh}")
-                  pg = sh.polygon
-                  if pg is not None:
-                      p = sh.polygon.transformed(iter.itrans())
-                      for e in p.each_edge():
-                         intersection = e.clipped_line(search_box)
-                         if intersection:
-                             # print(f"\t\tedges in search box: {intersection}")
-                             if nearest_edge is None or \
-                                e.distance_abs(location) &lt; nearest_edge.distance_abs(location):
-                                 layer = lyr
-                                 path = iter.path()
-                                 shape = sh
-                                 nearest_edge = e
-                  iter.next()
-
-        if nearest_edge is None:
-            return None
+            if self.cell_view.is_cell_hidden(top_cell):
+                continue
             
-        snap_point = self.find_nearest_edge_point(location=location, edge=nearest_edge)
-        return AlignToolSelection(layer=layer,
-                                  path=path,    
-                                  shape=shape,
-                                  edge=nearest_edge,
-                                  snap_point=snap_point)
+            # we prioritize the child instances of top cell
+            # for those we also consider the bounding box
+            if self.view.max_hier_levels &gt;= 1:
+                for inst in top_cell.each_inst():
+                    hidden = self.view.is_cell_hidden(inst.cell.cell_index(), self.view.active_cellview_index)
+                    # print(f"inst from cell {inst.cell.name} hidden? {hidden}")
+                    if not hidden:
+                        edges = pya.Edges(inst.bbox())
+                        for e in edges:
+                            consider_edge_selection(
+                                AlignToolSelection(location=location,
+                                                   search_box=search_box,
+                                                   edge=e,
+                                                   path=[],
+                                                   shape=inst.bbox(),
+                                                   bbox_of_instance=inst,
+                                                   layer=None,
+                                                   snap_point=None)  # NOTE: snap point will be set later
+                            )
+            
+            # for lyr, li in enumerate(self.layout.layer_infos()):
+            ## NOTE: GUI levels 0 .. 0 means that only the TOP cell(s) are viewed from outside!
+            if self.view.max_hier_levels &gt;= 1:
+                for lyr in visible_layer_indexes:
+                    iter = top_cell.begin_shapes_rec_overlapping(lyr, search_box)
+                    iter.min_depth = max(self.view.min_hier_levels-1, 0)
+                    iter.max_depth = max(self.view.max_hier_levels-1, 0)
+                    while not iter.at_end():
+                        sh = iter.shape()
+                        # print(f"lyr {lyr} ({li}), found {sh}")
+                        pg = sh.polygon
+                        if pg is None:
+                            print(f"Skip shape {sh}, it's has no polygon")
+                        else:
+                            p = sh.polygon.transformed(iter.itrans())
+                            for e in p.each_edge():
+                                consider_edge_selection(
+                                    AlignToolSelection(location=location,
+                                                       search_box=search_box,
+                                                       edge=e,
+                                                       path=iter.path(),
+                                                       shape=sh,
+                                                       bbox_of_instance=None,
+                                                       layer=lyr,
+                                                       snap_point=None)  # NOTE: snap point will be set later
+                                )
+                        iter.next()
+
+        if nearest.edge is None:
+            return None
+        
+        nearest_point = self.find_nearest_edge_point(location=location, edge=nearest.edge)
+        if search_box.contains(nearest_point):
+            nearest.snap_point = nearest_point
+        return nearest
     
+    def viewport_adjust(self, v: int) -&gt; int:
+        trans = pya.CplxTrans(self.view.viewport_trans(), self.dbu)
+        return v / trans.mag
+
     @property
     def max_distance(self) -&gt; int:
-        return 20
+        return self.viewport_adjust(20)
     
     def preview_markers_for_selection(self, selection: AlignToolSelection) -&gt; List[pya.Marker]:
+        markers = []
+    
         edge_marker = pya.Marker(self.view)
         edge_marker.line_style     = 0
-        edge_marker.line_width     = 1
-        edge_marker.vertex_size    = 4 
+        edge_marker.line_width     = 2
+        edge_marker.vertex_size    = 0 
         edge_marker.dither_pattern = 2
         edge_marker.set(selection.edge.to_dtype(self.dbu))
+        markers += [edge_marker]
         
-        point_marker = pya.Marker(self.view)
-        point_marker.line_style     = 0
-        point_marker.line_width     = 1
-        point_marker.vertex_size    = 4
-        point_marker.dither_pattern = 2
-        d = 10
-        marker_box = pya.Box(pya.Point(selection.snap_point.x - d, selection.snap_point.y - d), 
-                             pya.Point(selection.snap_point.x + d, selection.snap_point.y + d))
-        point_marker.set(marker_box.to_dtype(self.dbu))
+        if selection.snap_point is not None:
+            point_marker = pya.Marker(self.view)
+            point_marker.line_style     = 1
+            point_marker.line_width     = 2
+            point_marker.vertex_size    = 0
+            point_marker.dither_pattern = 0
+            d = self.viewport_adjust(5)
+            marker_box = pya.Box(pya.Point(selection.snap_point.x - d, selection.snap_point.y - d), 
+                                 pya.Point(selection.snap_point.x + d, selection.snap_point.y + d))
+            point_marker.set(marker_box.to_dtype(self.dbu))
+            markers += [point_marker]
         
-        return [edge_marker, point_marker]
+        if self.search_box_marker_visible:
+            search_box_marker = pya.Marker(self.view)
+            search_box_marker.line_style = 2
+            search_box_marker.line_width = 1
+            search_box_marker.vertex_size = 0
+            search_box_marker.dither_pattern = -1
+            search_box_marker.set(selection.search_box.to_dtype(self.dbu))
+            markers += [search_box_marker]
+
+        return markers
     
     def mouse_moved_event(self, dpoint: pya.DPoint, buttons: int, prio: bool):
         if prio:
@@ -338,24 +429,72 @@ class AlignToolPlugin(pya.Plugin):
         return False
         
     def commit_align(self, selection1: AlignToolSelection, selection2: AlignToolSelection):
+        # NOTE:
+        #      Point1 -&gt; Point2: X/Z movement
+        #      Point1 -&gt; Edge2: TODO???
+        #      Edge1 -&gt; Point2: TODO???
+        #      Edge1 -&gt; Edge2: move only in direction normal to the edge
+        
+        is_point1 = selection1.snap_point is not None
+        is_edge1 = not is_point1
+        is_point2 = selection2.snap_point is not None
+        is_edge2 = not is_point2
+
+        dx = 0
+        dy = 0
+        transformee = None
+
+        if len(selection1.path) == 0:  # a shape within the same cell has to be aligned
+            inst1 = selection1.bbox_of_instance
+            if inst1 is None:
+                transformee = selection1.shape
+            else:  # bounding box of an instance
+                transformee = inst1
+        elif len(selection1.path) &gt;= 1:  # an instance has to be aligned
+            transformee = selection1.path[0].inst()
+
+        if is_point1 and is_point2:
+            dx = selection2.snap_point.x - selection1.snap_point.x
+            dy = selection2.snap_point.y - selection1.snap_point.y
+        elif is_point1 and is_edge2:
+            edge2 = selection2.edge
+            is_horizontal = edge2.dy() == 0
+            is_vertical = edge2.dx() == 0
+            if is_horizontal:
+                dx = selection1.snap_point.x
+                dy = edge2.p1.y - selection1.snap_point.y
+            elif is_vertical:
+                dx = edge2.p1.x - selection1.snap_point.x
+                dy = 0
+        elif is_edge1 and is_point2:
+            edge1 = selection1.edge
+            is_horizontal = edge1.dy() == 0
+            is_vertical = edge1.dx() == 0
+            if is_horizontal:
+                dx = 0
+                dy = selection2.snap_point.y - edge1.p1.y
+            elif is_vertical:
+                dx = selection2.snap_point.x - edge1.p1.x
+                dy = 0
+        elif is_edge1 and is_edge2:
+            edge1 = selection1.edge
+            edge2 = selection2.edge
+            if edge1.is_parallel(edge2):
+                is_horizontal = edge1.dy() == 0
+                is_vertical = edge1.dx() == 0
+                if is_horizontal:
+                    dx = 0
+                    dy = edge2.p1.y - edge1.p1.y
+                elif is_vertical:
+                    dx = edge2.p1.x - edge1.p1.x
+                    dy = 0
+                else:
+                    pass   # TODO!                    
+        
         self.view.transaction("align")
         try:
-            if len(selection1.path) == 0:  # a shape within the same cell has to be aligned
-                debug(f"COMMIT, "
-                      f"\n\tshape {selection1.shape} is aligned to "
-                      f"\n\t{selection2.snap_point}")
-                trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
-                                  selection2.snap_point.y - selection1.snap_point.y)
-                selection1.shape.transform(trans)
-            elif len(selection1.path) &gt;= 1:  # an instance has to be aligned
-                inst1 = selection1.path[0]
-                debug(f"COMMIT, "
-                      f"\n\tinstance {inst1} is aligned to "
-                      f"\n\t{selection2.snap_point}")
-                trans = pya.Trans(selection2.snap_point.x - selection1.snap_point.x,
-                                  selection2.snap_point.y - selection1.snap_point.y)
-                inst1.inst().transform(trans)
-            
+            trans = pya.Trans(dx, dy)
+            transformee.transform(trans)
         finally:
             self.view.commit()
             self.deactivate()
