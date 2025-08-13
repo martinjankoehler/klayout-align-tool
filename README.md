@@ -1,4 +1,4 @@
-# KLayout Align Tool
+# KLayout Plugin: Align Tool
 
 [![Watch the demo](doc/klayout-align-screenshot-demo-video.gif)](https://youtube.com/watch/v=sCo4Cf1f09Y)
 
@@ -12,6 +12,19 @@
 This add-on can be installed through [KLayout](https://klayout.de) package manager, [installation instructions details here](#installation-instructions)
 
 After installation, the app can be accessed through *Toolbar*→*Align*
+
+---
+
+## Table of Contents
+- [Usage](#usage)
+  - [Pre-selection](#pre-selection)
+  - [Selecting features (when tool is active)](#selecting-features-when-tool-is-active)
+  - [Example 1: point-to-point alignment](#example-1-point-to-point-alignment)
+  - [Example 2: edge-to-edge alignment](#example-2-edge-to-edge-alignment)
+- [Pro-Tip: assign key binding 'a' to the tool](#pro-tip-assign-key-binding-a-to-the-tool)
+- [Installation using KLayout Package Manager](#installation-using-klayout-package-manager)
+
+---
 
 ## Usage
 
