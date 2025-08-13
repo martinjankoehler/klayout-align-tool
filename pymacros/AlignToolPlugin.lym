@@ -389,10 +389,11 @@ class AlignToolPlugin(pya.Plugin):
                     iter.max_depth = max(self.view.max_hier_levels-1, 0)
                     while not iter.at_end():
                         sh = iter.shape()
-                        # print(f"lyr {lyr} ({li}), found {sh}")
+                        # debug(f"lyr {lyr} ({li}), found {sh}")
                         pg = sh.polygon
                         if pg is None:
-                            print(f"Skip shape {sh}, it's has no polygon")
+                            # debug(f"Skip shape {sh}, it's has no polygon")
+                            pass
                         else:
                             p = sh.polygon.transformed(iter.itrans())
                             for e in p.each_edge():
