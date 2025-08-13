@@ -553,7 +553,7 @@ class AlignToolPlugin(pya.Plugin):
             is_horizontal = edge2.dy() == 0
             is_vertical = edge2.dx() == 0
             if is_horizontal:
-                dx = selection1.snap_point.x
+                dx = 0
                 dy = edge2.p1.y - selection1.snap_point.y
             elif is_vertical:
                 dx = edge2.p1.x - selection1.snap_point.x
