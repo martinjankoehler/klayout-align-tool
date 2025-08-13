@@ -21,7 +21,7 @@ After installation, this tool can be accessed through *Toolbar*→*Align*
   - [Selecting features (when tool is active)](#selecting-features-when-tool-is-active)
   - [Example 1: point-to-point alignment](#example-1-point-to-point-alignment)
   - [Example 2: edge-to-edge alignment](#example-2-edge-to-edge-alignment)
-- [Pro-Tip: assign key binding 'a' to the tool](#pro-tip-assign-key-binding-a-to-the-tool)
+- [Pro-Tip: assign key binding `A` to the tool](#pro-tip-assign-key-binding-a-to-the-tool)
 - [Installation using KLayout Package Manager](#installation-using-klayout-package-manager)
 
 ---
