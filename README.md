@@ -15,7 +15,7 @@ After installation, the app can be accessed through *Toolbar*→*Align*
 
 ## Usage
 
-1. Click the *Align* tool or press 'a' to enter the align mode (if you've configured the key binding for a)
+1. Click the *Align* tool or press 'a' to enter the align mode (if you've configured the key binding for `a`, [as explained here](#shortcut)
 <p align="center">
 <img align="middle" src="doc/marked-step1-select-align-tool.jpg" alt="Step 1: Select Align Tool" width="800"/>
 </p>
@@ -34,6 +34,7 @@ After installation, the app can be accessed through *Toolbar*→*Align*
 5. Press Esc to cancel the operation
 
 ## Pro-Tip: assign key binding 'a' to the tool
+<a id="shortcut"></a>
 
 - In the main menu, open the Preferences/Settings in KLayout
 - Navigate to *Application*→*Customize Menu*
