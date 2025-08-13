@@ -41,7 +41,7 @@ from enum import StrEnum
 import pya
 
 
-DEBUG = True
+DEBUG = False
 
 
 def debug(*args, **kwargs):
