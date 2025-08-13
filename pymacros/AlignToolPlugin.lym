@@ -41,7 +41,7 @@ from enum import StrEnum
 import pya
 
 
-DEBUG = False
+DEBUG = True
 
 
 def debug(*args, **kwargs):
@@ -76,36 +76,94 @@ class AlignToolSetupDock(pya.QDockWidget):
         
     def updateState(self, state: AlignToolState):
         self.setupWidget.updateState(state)
+
+    def updatePreSelection(self, pre_selection: List[pya.Instance | pya.Shape]):
+        self.setupWidget.updatePreSelection(pre_selection)
         
+    def updateSelection1(self, selection: AlignToolSelection):
+        self.setupWidget.updateSelection1(selection)
+
         
 class AlignToolSetupWidget(pya.QWidget):
     def __init__(self):
         super().__init__()
-        self.statusLabel = pya.QLabel("Status: initalizing…")
-        self.cancelInfoLabel = pya.QLabel("Esc to cancel")
-        self.cancelInfoLabel.foregroundRole = pya.QPalette_ColorRole.Mid
+        self.pre_selection_label = pya.QLabel('')
+        self.selection1_value_label = pya.QLabel('&lt;span style="text-decoration: underline;"&gt;Source ref:&lt;/span&gt; None yet')
+        self.selection1_status_label = pya.QLabel('')
+        self.selection2_value_label = pya.QLabel('&lt;span style="text-decoration: underline;"&gt;Target ref:&lt;/span&gt; None yet')
+        self.selection2_status_label = pya.QLabel('')
+        self.spacerItem = pya.QSpacerItem(0, 20, pya.QSizePolicy.Minimum, pya.QSizePolicy.Fixed)
+        self.cancelInfoLabel = pya.QLabel('&lt;span style="color: grey;"&gt;&lt;span style="text-decoration: underline;"&gt;Hint:&lt;/span&gt; Esc to cancel&lt;/span&gt;')
         
-        self.layout       = pya.QGridLayout()
-        self.layout.addWidget(self.statusLabel,    0, 0, 1, 1)
-        self.layout.addWidget(self.cancelInfoLabel,    1, 0, 1, 1)
-        self.layout.setRowStretch(2, 1)
+        self.layout = pya.QGridLayout()
+        self.layout.setSpacing(10)
+        self.layout.setVerticalSpacing(5)
+        self.layout.addWidget(self.pre_selection_label,     0, 0)
+        self.layout.addWidget(self.selection1_value_label,  1, 0)
+        self.layout.addWidget(self.selection1_status_label, 1, 1)
+        self.layout.addWidget(self.selection2_value_label,  2, 0)
+        self.layout.addWidget(self.selection2_status_label, 2, 1)
+        self.layout.addItem(self.spacerItem)
+        self.layout.addWidget(self.cancelInfoLabel,         4, 0)
+        self.layout.setRowStretch(5, 1)
         self.setLayout(self.layout)
          
     def hideEvent(self, event):
         event.accept()
-
+    
     def updateState(self, state: AlignToolState):
         msg: str = ""
         match state:
             case AlignToolState.INACTIVE:
-                msg = ""
+                self.selection1_status_label.setText("")
+                self.selection2_status_label.setText("")
             case AlignToolState.PENDING_SELECTION1:
-                msg = "Next: Select point/edge to align"
+                self.selection1_status_label.setText(
+                    '&lt;span style="color:blue; font-weight:bold;"&gt;⬅&lt;/span&gt; '
+                    '&lt;span style="font-weight:bold; color:blue;"&gt;Next&lt;/span&gt;'
+                )
+                self.selection2_status_label.setText("")
             case AlignToolState.PENDING_SELECTION2:
-                msg = "Next: Select point/edge to reference"
-        self.statusLabel.setText(msg)
+                self.selection1_status_label.setText("✅")
+                self.selection2_status_label.setText(
+                    '&lt;span style="color:blue; font-weight:bold;"&gt;⬅&lt;/span&gt; '
+                    '&lt;span style="font-weight:bold; color:blue;"&gt;Next&lt;/span&gt;'
+                )
 
-        
+    def updatePreSelection(self, pre_selection: List[pya.Instance | pya.Shape]):
+        if len(pre_selection) == 0:
+            msg = '&lt;span style="text-decoration: underline;"&gt;Pre-selection:&lt;/span&gt; None'
+        else:
+            def format_len(l: List, singular: str) -&gt; Optional[str]:
+                n = len(l)
+                match n:
+                    case 0: return None
+                    case 1: return f"1 {singular}"
+                    case _: return f"{n} {singular}s"
+            
+            instances = [o for o in pre_selection if isinstance(o, pya.Instance)]
+            shapes = [o for o in pre_selection if isinstance(o, pya.Shape)]
+            entries = [
+                format_len(instances, "instance"),
+                format_len(shapes, "shape")
+            ]
+            msg = '&lt;span style="text-decoration: underline;"&gt;Pre-selection:&lt;/span&gt; ' + \
+                  ', '.join([e for e in entries if e is not None])
+        self.pre_selection_label.setText(msg)
+
+    def format_selection(self, selection: Optional[AlignToolSelection]) -&gt; str:
+        if selection is None:
+            return "None yet"
+        if selection.snap_point is not None:
+            return "1 point"
+        return "1 edge"
+
+    def updateSelection1(self, selection: Optional[AlignToolSelection]):
+        txt = '&lt;span style="text-decoration: underline;"&gt;Source ref:&lt;/span&gt; ' + \
+              self.format_selection(selection)
+        self.selection1_value_label.setText(txt)
+
+
 class AlignToolPlugin(pya.Plugin):
     def __init__(self, view: pya.LayoutView):
         super().__init__()
@@ -113,7 +171,7 @@ class AlignToolPlugin(pya.Plugin):
         self.view            = view
 
         self._state = AlignToolState.INACTIVE
-        self.pre_selected_objects = []
+        self._pre_selected_objects = []
         self._selection1: Optional[AlignToolSelection] = None
         self.markers_selection1 = []
         self.markers_selection2 = []
@@ -145,6 +203,20 @@ class AlignToolPlugin(pya.Plugin):
             self.setupDock.updateState(state)
 
     @property
+    def pre_selected_objects(self) -&gt; List[pya.Instance | pya.Shape]:
+        return self._pre_selected_objects
+
+    @pre_selected_objects.setter
+    def pre_selected_objects(self, objects: List[pya.Instance | pya.Shape]):
+        debug(f"Setting pre_selected_objects ({len(self.pre_selected_objects)}): {self.pre_selected_objects}")
+        
+        self._pre_selected_objects = objects
+        if not(self.setupDock):
+            pass
+        else:
+            self.setupDock.updatePreSelection(objects)
+
+    @property
     def selection1(self) -&gt; AlignToolSelection:
         return self._selection1
 
@@ -152,11 +224,24 @@ class AlignToolPlugin(pya.Plugin):
     def selection1(self, selection: AlignToolSelection):
         debug(f"setting selection1 to {selection}")
         self._selection1 = selection
+        if not(self.setupDock):
+            pass
+        else:
+            self.setupDock.updateSelection1(selection)
 
     @property
     def search_box_marker_visible(self) -&gt; bool:
         return True  # DEBUG
 
+    def selected_objects(self) -&gt; List:
+        l = []
+        for o in self.view.each_object_selected():
+            if o.is_cell_inst():
+                l += [o.inst()]
+            elif o.shape is not None:
+                l += [o.shape]
+        return l
+        
     def activated(self):
         view_is_visible = self.view.widget().isVisible()
         debug(f"AlignToolPlugin.activated, "
@@ -172,8 +257,7 @@ class AlignToolPlugin(pya.Plugin):
             mw.addDockWidget(pya.Qt_DockWidgetArea.RightDockWidgetArea, self.setupDock)
         self.setupDock.show()
 
-        self.pre_selected_objects = list(self.view.each_object_selected())
-        debug(f"{len(self.pre_selected_objects)} objects preselected: {self.pre_selected_objects}")
+        self.pre_selected_objects = self.selected_objects()
         
         self.state = AlignToolState.PENDING_SELECTION1
             
@@ -451,11 +535,7 @@ class AlignToolPlugin(pya.Plugin):
         transformees = []
 
         if len(self.pre_selected_objects) &gt;= 1:  # user had a preselection of one or multiple objects
-            for o in self.pre_selected_objects:
-                if o.is_cell_inst():
-                    transformees += [o.inst()]
-                elif o.shape is not None:
-                    transformees += [o.shape()]
+            transformees = self.pre_selected_objects
         elif len(selection1.path) == 0:  # a shape within the same cell has to be aligned
             inst1 = selection1.bbox_of_instance
             if inst1 is None:
