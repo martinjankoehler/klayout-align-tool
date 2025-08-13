@@ -279,16 +279,17 @@ class AlignToolPlugin(pya.Plugin):
                     if not hidden:
                         edges = pya.Edges(inst.bbox())
                         for e in edges:
-                            consider_edge_selection(
-                                AlignToolSelection(location=location,
-                                                   search_box=search_box,
-                                                   edge=e,
-                                                   path=[],
-                                                   shape=inst.bbox(),
-                                                   bbox_of_instance=inst,
-                                                   layer=None,
-                                                   snap_point=None)  # NOTE: snap point will be set later
-                            )
+                            if e.clipped(search_box) is not None:
+                                consider_edge_selection(
+                                    AlignToolSelection(location=location,
+                                                       search_box=search_box,
+                                                       edge=e,
+                                                       path=[],
+                                                       shape=inst.bbox(),
+                                                       bbox_of_instance=inst,
+                                                       layer=None,
+                                                       snap_point=None)  # NOTE: snap point will be set later
+                                )
             
             # for lyr, li in enumerate(self.layout.layer_infos()):
             ## NOTE: GUI levels 0 .. 0 means that only the TOP cell(s) are viewed from outside!
