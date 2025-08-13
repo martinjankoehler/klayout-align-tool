@@ -113,6 +113,7 @@ class AlignToolPlugin(pya.Plugin):
         self.view            = view
 
         self._state = AlignToolState.INACTIVE
+        self.pre_selected_objects = []
         self._selection1: Optional[AlignToolSelection] = None
         self.markers_selection1 = []
         self.markers_selection2 = []
@@ -170,6 +171,9 @@ class AlignToolPlugin(pya.Plugin):
             self.setupDock = AlignToolSetupDock()
             mw.addDockWidget(pya.Qt_DockWidgetArea.RightDockWidgetArea, self.setupDock)
         self.setupDock.show()
+
+        self.pre_selected_objects = list(self.view.each_object_selected())
+        debug(f"{len(self.pre_selected_objects)} objects preselected: {self.pre_selected_objects}")
         
         self.state = AlignToolState.PENDING_SELECTION1
             
@@ -177,6 +181,7 @@ class AlignToolPlugin(pya.Plugin):
         debug("AlignToolPlugin.deactivated")
         
         self.state = AlignToolState.INACTIVE
+        self.pre_selected_objects = []
         
         self._clear_all_markers()
         self.ungrab_mouse()
@@ -443,16 +448,22 @@ class AlignToolPlugin(pya.Plugin):
 
         dx = 0
         dy = 0
-        transformee = None
+        transformees = []
 
-        if len(selection1.path) == 0:  # a shape within the same cell has to be aligned
+        if len(self.pre_selected_objects) &gt;= 1:  # user had a preselection of one or multiple objects
+            for o in self.pre_selected_objects:
+                if o.is_cell_inst():
+                    transformees += [o.inst()]
+                elif o.shape is not None:
+                    transformees += [o.shape()]
+        elif len(selection1.path) == 0:  # a shape within the same cell has to be aligned
             inst1 = selection1.bbox_of_instance
             if inst1 is None:
-                transformee = selection1.shape
+                transformees = [selection1.shape]
             else:  # bounding box of an instance
-                transformee = inst1
+                transformees = [inst1]
         elif len(selection1.path) &gt;= 1:  # an instance has to be aligned
-            transformee = selection1.path[0].inst()
+            transformees = [selection1.path[0].inst()]
 
         if is_point1 and is_point2:
             dx = selection2.snap_point.x - selection1.snap_point.x
@@ -495,7 +506,8 @@ class AlignToolPlugin(pya.Plugin):
         self.view.transaction("align")
         try:
             trans = pya.Trans(dx, dy)
-            transformee.transform(trans)
+            for t in transformees:
+                t.transform(trans)
         finally:
             self.view.commit()
             self.deactivate()
