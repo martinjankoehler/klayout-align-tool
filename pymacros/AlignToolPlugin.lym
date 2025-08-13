@@ -580,8 +580,11 @@ class AlignToolPlugin(pya.Plugin):
                 elif is_vertical:
                     dx = edge2.p1.x - edge1.p1.x
                     dy = 0
-                else:
-                    pass   # TODO!                    
+            else:
+                pya.QMessageBox.warning(self.view.widget(), "Unsupported case", 
+                                        "Aligning non-parallel edges is not supported yet, ignoring this attempt")
+                self.deactivate()
+                return
         
         self.view.transaction("align")
         try:
