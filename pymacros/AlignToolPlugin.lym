@@ -37,8 +37,17 @@
 from dataclasses import dataclass
 from typing import *
 import os 
-from enum import StrEnum
+import sys
+
 import pya
+
+if sys.version_info &gt;= (3, 11):
+    from enum import StrEnum
+else:
+    from enum import Enum
+    class StrEnum(str, Enum):
+        def __str__(self) -&gt; str:
+            return str(self.value)
 
 
 DEBUG = False
