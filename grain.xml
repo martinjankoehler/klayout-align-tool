@@ -3,11 +3,11 @@
  <name>AlignToolPlugin</name>
  <token/>
  <hidden>false</hidden>
- <version>0.9</version>
+ <version>0.10</version>
  <api-version/>
  <title>Align Tool Plugin</title>
  <doc>Tool to align layout objects</doc>
- <doc-url>https://github.com/martinjankoehler/klayout-align-tool</doc-url>
+ <doc-url>https://github.com/iic-jku/klayout-align-tool</doc-url>
  <url/>
  <license>GPLv3</license>
  <author>Martin Jan Köhler</author>
