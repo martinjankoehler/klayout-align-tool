@@ -1,3 +1,7 @@
+⚠️ **LEGACY WARNING** ⚠️: This repo was moved to https://github.com/iic-jku/klayout-align-tool
+
+---
+
 # KLayout Plugin: Align Tool
 
 [![Watch the demo](doc/klayout-align-screenshot-demo-video.gif)](https://youtube.com/watch/v=sCo4Cf1f09Y)
